@@ -5,6 +5,7 @@
 -- the shared channel, so a recording can be started with no bar pill placed.
 
 local state = "idle"
+local elapsed = 0
 local recording = false
 local active = false
 
@@ -15,9 +16,22 @@ local function tr(key)
     return noctalia.tr(key)
 end
 
+local function formatTime(seconds)
+    local total = math.max(0, math.floor(tonumber(seconds) or 0))
+    local hours = math.floor(total / 3600)
+    local minutes = math.floor((total % 3600) / 60)
+    local rest = total % 60
+    if hours > 0 then
+        return string.format("%d:%02d:%02d", hours, minutes, rest)
+    end
+    return string.format("%d:%02d", minutes, rest)
+end
+
+-- The tile has one label, so a running recording shows its timer: the same
+-- "it is recording, for this long" read the DMS tile gave with icon plus timer.
 local function label()
     if state == "recording" then
-        return tr("shortcut.recording")
+        return formatTime(elapsed)
     elseif state == "paused" then
         return tr("shortcut.paused")
     elseif state == "armed" then
@@ -40,6 +54,7 @@ end
 local function applyStatus(status)
     if type(status) == "table" then
         state = status.state or "idle"
+        elapsed = tonumber(status.elapsed) or 0
     end
     recording = RECORDING_STATES[state] == true
     active = ACTIVE_STATES[state] == true

@@ -73,6 +73,16 @@ full.
 | Right-click the bar pill | Open the popout with every control. |
 | Control-center tile | Toggle the recorder. |
 
+On a vertical bar the pill stacks the timer the way the built-in clock stacks its time:
+minutes on the top line, seconds below (`0` / `42`), with a red stop square above them.
+A horizontal bar gets the inline form instead (`0:42`). The control-center tile shows the
+same timer as its label while a recording runs, so the running time is visible wherever
+you started it.
+
+`barWidget.isVertical()` answers `false` for a side bar in Noctalia 5.3.0, so when it does,
+the pill reads the bar's `position` from the shell config once per load instead of trusting
+it.
+
 The pill records the display **its bar sits on**: the command carries
 `barWidget.outputName()`, so a pill on a second monitor captures that monitor even when
 keyboard focus is elsewhere. Keybindings and the control-center tile have no display of

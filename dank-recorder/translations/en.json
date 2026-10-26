@@ -92,6 +92,7 @@
   "widget.resolving": "Choosing capture area…",
   "widget.start-question": "Start?",
   "widget.stop-question": "Stop?",
+  "widget.stop-hint": "Click again within 3 seconds",
   "widget.working": "Working…",
 
   "panel.title": "Screen recording",

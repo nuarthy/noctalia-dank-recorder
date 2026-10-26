@@ -25,6 +25,17 @@ local function send(action)
     noctalia.state.set("command", { action = action, output = barWidget.outputName() })
 end
 
+-- Two lines for a vertical bar: minutes on top, seconds below, the way the built-in
+-- clock stacks its hour and minute under a vertical bar.
+local function timerLines(seconds)
+    local total = math.max(0, math.floor(tonumber(seconds) or 0))
+    local hours = math.floor(total / 3600)
+    local minutes = math.floor((total % 3600) / 60)
+    local rest = total % 60
+    local top = if hours > 0 then string.format("%d:%02d", hours, minutes) else tostring(minutes)
+    return top, string.format("%02d", rest)
+end
+
 local function formatTime(seconds)
     local total = math.max(0, math.floor(seconds))
     local hours = math.floor(total / 3600)
@@ -101,17 +112,94 @@ local function tooltipRows()
     else
         rows[#rows + 1] = { key = tr("panel.title"), value = tr("widget.working") }
     end
+    if isConfirmingStop() then
+        rows[#rows + 1] = { key = tr("widget.stop-question"), value = tr("widget.stop-hint") }
+    end
     if lastError ~= "" and state == "idle" then
         rows[#rows + 1] = { key = tr("panel.error"), value = lastError }
     end
     return rows
 end
 
+-- barWidget.isVertical() answers false for a side bar in Noctalia 5.3.0, so ask the
+-- shell config when it does. Resolved once per load: moving a bar reloads the widget.
+local function detectVerticalBar()
+    local ok, vertical = pcall(function()
+        return barWidget.isVertical()
+    end)
+    if ok and vertical == true then
+        return true
+    end
+    local names = noctalia.getSetting("bar.order")
+    if type(names) == "table" then
+        local name = names[1]
+        if type(name) == "string" then
+            local position = noctalia.getSetting("bar." .. name .. ".position")
+            if type(position) == "string" then
+                return position == "left" or position == "right"
+            end
+        end
+    end
+    return false
+end
+
+local stackedTimer = detectVerticalBar()
+
+local function glyphNode()
+    return ui.glyph({
+        name = glyphForState(),
+        size = if stackedTimer then 17 else 18,
+        color = colorForState(),
+    })
+end
+
+-- barWidget.render replaces the built-in glyph/text row, so every state is built as a
+-- tree: a column on a vertical bar (glyph above the timer), a row on a horizontal one.
 local function render()
-    barWidget.setGlyph(glyphForState())
-    barWidget.setGlyphColor(colorForState())
-    barWidget.setText(textForState())
-    barWidget.setColor("on_surface")
+    local vertical = stackedTimer
+    local children = { glyphNode() }
+    local caption = textForState()
+
+    if vertical then
+        -- The DMS vertical pill kept the timer here too: a word like "Stop?" does not
+        -- fit the narrow capsule, and the warning colour plus tooltip carry the hint.
+        if state == "recording" or state == "paused" then
+            local top, bottom = timerLines(elapsed)
+            children[#children + 1] = ui.label({
+                text = top,
+                fontSize = 13,
+                fontWeight = "semibold",
+                color = "on_surface",
+                textAlign = "center",
+            })
+            children[#children + 1] = ui.label({
+                text = bottom,
+                fontSize = 12,
+                color = "on_surface_variant",
+                textAlign = "center",
+            })
+        elseif caption ~= "" then
+            children[#children + 1] = ui.label({
+                text = caption,
+                fontSize = 12,
+                fontWeight = "bold",
+                color = "on_surface",
+                textAlign = "center",
+            })
+        end
+        barWidget.render(ui.column({ gap = 0, align = "center" }, children))
+    else
+        if caption ~= "" then
+            children[#children + 1] = ui.label({
+                text = caption,
+                fontSize = 13,
+                fontWeight = "bold",
+                color = "on_surface",
+            })
+        end
+        barWidget.render(ui.row({ gap = 4, align = "center" }, children))
+    end
+
     barWidget.setTooltip(tooltipRows())
 end
 
