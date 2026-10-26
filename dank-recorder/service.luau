@@ -233,6 +233,7 @@ local function publish()
         audioSource = audioSource(),
         target = if armed.isRegion then tr("confirm.selected-region") else tr("confirm.live-desktop"),
         isRegion = armed.isRegion,
+        outputs = #noctalia.outputs(),
         gpus = gpuSummary,
         caps = capsSummary,
         outputDir = outputDirectory(),
@@ -855,6 +856,31 @@ local function reselectRegion()
     return "selecting"
 end
 
+-- Step the armed target to the next connected display. The canvas bar exposes this
+-- because the focused output is not always the display the user is working on, and
+-- gsr's own keywords cannot express "the other monitor".
+local function cycleOutput()
+    if recState ~= "armed" then
+        return "not-armed"
+    end
+    local names = {}
+    for _, output in ipairs(noctalia.outputs()) do
+        names[#names + 1] = output.name
+    end
+    if #names == 0 then
+        return "no-outputs"
+    end
+    local nextName = names[1]
+    for index, name in ipairs(names) do
+        if name == armed.source then
+            nextName = names[(index % #names) + 1]
+            break
+        end
+    end
+    nextRequest()
+    return arm(nextName, "", armed.origin)
+end
+
 local function useFullScreen()
     if recState ~= "armed" then
         return "not-armed"
@@ -880,6 +906,16 @@ local function begin(modeOverride)
         return "busy"
     end
     lastError = ""
+    if type(modeOverride) == "string" and not CAPTURE_MODES[modeOverride]
+        and outputByConnector(modeOverride) ~= nil then
+        -- `start HDMI-A-1`: an explicit connector from IPC or a keybind.
+        local id = nextRequest()
+        setState("resolving")
+        if id == requestId then
+            return arm(modeOverride, "", nil)
+        end
+    end
+
     local mode = if type(modeOverride) == "string" and CAPTURE_MODES[modeOverride] then modeOverride else nil
     if mode == nil then
         local configured = confString("capture_target", "focused")
@@ -1064,6 +1100,8 @@ local function handleAction(action, payload)
         return reselectRegion()
     elseif action == "fullscreen" then
         return useFullScreen()
+    elseif action == "cycle-output" or action == "next-output" then
+        return cycleOutput()
     elseif action == "stop" then
         return requestStop()
     elseif action == "toggle" then

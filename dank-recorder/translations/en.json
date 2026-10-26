@@ -80,6 +80,7 @@
   "confirm.selected-region": "Selected region",
   "confirm.full-screen": "Full screen",
   "confirm.full-screen-tooltip": "Capture the whole focused display",
+  "confirm.cycle-output-tooltip": "Switch display",
   "confirm.region": "Region",
   "confirm.region-tooltip": "Select the area to capture again",
   "confirm.audio-tooltip": "Include desktop audio or mute it",

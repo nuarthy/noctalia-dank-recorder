@@ -103,6 +103,7 @@ confirm_position = "bottom_left" # top_left … bottom_right, center
 
 | Button | Result |
 | --- | --- |
+| Display (monitor icon) | Step the target to the next connected display; the canvas label follows. Enabled when more than one display is connected. |
 | Full screen | Capture the whole focused display. Enabled while a region is selected. |
 | Region | Select the canvas again with `slurp`. |
 | Sound / Muted | Include desktop audio, or mute. The source comes from the Audio setting. |
@@ -138,13 +139,15 @@ binds {
 
 ```shell
 noctalia msg plugin nuarthy/dank-recorder:service all start          # Resolve the target, then show the canvas bar
+noctalia msg plugin nuarthy/dank-recorder:service all start HDMI-A-1  # Show the bar for that display
 noctalia msg plugin nuarthy/dank-recorder:service all start-region   # Select a region, then show the canvas bar
 noctalia msg plugin nuarthy/dank-recorder:service all start-portal   # Start through the desktop portal
 noctalia msg plugin nuarthy/dank-recorder:service all start-fullscreen  # Use the whole screen as the canvas
 noctalia msg plugin nuarthy/dank-recorder:service all confirm        # Start the pending recording
 noctalia msg plugin nuarthy/dank-recorder:service all cancel         # Discard the pending recording
 noctalia msg plugin nuarthy/dank-recorder:service all reselect       # Select the region again
-noctalia msg plugin nuarthy/dank-recorder:service all fullscreen     # Use the whole screen as the canvas
+noctalia msg plugin nuarthy/dank-recorder:service all fullscreen     # Use the whole armed display as the canvas
+noctalia msg plugin nuarthy/dank-recorder:service all cycle-output   # Step the armed target to the next display
 noctalia msg plugin nuarthy/dank-recorder:service all stop           # Stop and save
 noctalia msg plugin nuarthy/dank-recorder:service all toggle         # Start or stop
 noctalia msg plugin nuarthy/dank-recorder:service all pause          # Pause or resume

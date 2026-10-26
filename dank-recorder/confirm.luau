@@ -34,6 +34,10 @@ function cmdReselect()
     send("reselect")
 end
 
+function cmdCycleOutput()
+    send("cycle-output")
+end
+
 function cmdAudio()
     send("toggle-audio")
 end
@@ -96,6 +100,14 @@ local function render()
                 }),
             }),
             ui.spacer({ flexGrow = 1 }),
+            ui.button({
+                glyph = "device-desktop",
+                variant = "secondary",
+                controlSize = "md",
+                tooltip = tr("confirm.cycle-output-tooltip"),
+                enabled = (tonumber(status.outputs) or 1) > 1,
+                onClick = "cmdCycleOutput",
+            }),
             ui.button({
                 text = tr("confirm.full-screen"),
                 glyph = "maximize",
