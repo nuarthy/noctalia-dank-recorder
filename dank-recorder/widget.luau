@@ -19,8 +19,10 @@ local function tr(key)
     return noctalia.tr(key)
 end
 
+-- The command carries the display this pill sits on, so a recording started from a
+-- bar on a second monitor captures that monitor even when keyboard focus is elsewhere.
 local function send(action)
-    noctalia.state.set("command", { action = action })
+    noctalia.state.set("command", { action = action, output = barWidget.outputName() })
 end
 
 local function formatTime(seconds)

@@ -73,6 +73,11 @@ full.
 | Right-click the bar pill | Open the popout with every control. |
 | Control-center tile | Toggle the recorder. |
 
+The pill records the display **its bar sits on**: the command carries
+`barWidget.outputName()`, so a pill on a second monitor captures that monitor even when
+keyboard focus is elsewhere. Keybindings and the control-center tile have no display of
+their own and follow the focused output.
+
 Clicking a recording pill shows `Stop?`. Click it again within three seconds to stop;
 otherwise the pill returns to the elapsed time.
 
@@ -98,7 +103,7 @@ confirm_position = "bottom_left" # top_left … bottom_right, center
 
 | Button | Result |
 | --- | --- |
-| Full screen | Capture the whole display. Enabled while a region is selected. |
+| Full screen | Capture the whole focused display. Enabled while a region is selected. |
 | Region | Select the canvas again with `slurp`. |
 | Sound / Muted | Include desktop audio, or mute. The source comes from the Audio setting. |
 | Cancel | Discard the pending recording. |
@@ -174,6 +179,13 @@ return channel.
 | Output folder | empty | Empty uses the XDG videos folder, or `~/Videos/Screencasts`. |
 
 ## How the GPU fallback works
+
+Every target is an explicit connector (`-w HDMI-A-1`), never gsr's `screen` keyword: the
+man page defines `-w screen` as "record the first monitor found", which is the main
+display even when another one is focused, and it made the canvas bar advertise one screen
+while recording another. The first-monitor setting resolves `gpu-screen-recorder
+--list-monitors` to a name, and the full-screen action keeps whichever display the bar was
+armed on.
 
 `gpu-screen-recorder` encodes on the GPU that drives the captured monitor, so the plugin
 uses two mechanisms:

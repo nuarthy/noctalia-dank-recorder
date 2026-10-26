@@ -198,7 +198,7 @@ local lastFile = ""
 local lastError = ""
 local tick = 0
 
-local armed = { source = "", region = "", isRegion = false }
+local armed = { source = "", region = "", isRegion = false, origin = "" }
 local requestId = 0
 local pid = 0
 local pendingFile = ""
@@ -418,6 +418,49 @@ local function focusedOutput()
     return nil
 end
 
+-- The connector of the display that currently has focus, or nil when the shell
+-- cannot name one.
+local function focusedConnector()
+    local name = noctalia.focusedOutputName()
+    if type(name) == "string" and name ~= "" then
+        return name
+    end
+    local output = focusedOutput()
+    if output ~= nil then
+        return output.name
+    end
+    return nil
+end
+
+-- gpu-screen-recorder's own first monitor. `-w screen` is not "the whole desktop":
+-- the man page defines it as "record the first monitor found", which is the main
+-- display even when another one is focused.
+local firstMonitor = ""
+
+local function detectFirstMonitor()
+    noctalia.runAsync({ "gpu-screen-recorder", "--list-monitors" }, function(result)
+        local line = (result.stdout or ""):match("^[^\n]+")
+        if line ~= nil then
+            local name = noctalia.string.trim(line:match("^[^|]+") or "")
+            if name ~= "" then
+                firstMonitor = name
+                log(`first monitor: {firstMonitor}`)
+            end
+        end
+    end, 5000)
+end
+
+local function firstMonitorConnector()
+    if firstMonitor ~= "" then
+        return firstMonitor
+    end
+    local outputs = noctalia.outputs()
+    if #outputs > 0 then
+        return outputs[1].name
+    end
+    return "screen"
+end
+
 local function canvasText(source, region)
     if region ~= nil and region ~= "" then
         local width, height, x, y = region:match("^(%d+)x(%d+)%+(-?%d+)%+(-?%d+)$")
@@ -426,9 +469,13 @@ local function canvasText(source, region)
         end
         return region
     end
-    local output = if source == "screen" or source == "portal" then focusedOutput() else outputByConnector(source)
+    if source == "portal" then
+        -- The portal picks the source itself; claiming a size here would be a guess.
+        return "Full screen"
+    end
+    local output = if source == "focused" then focusedOutput() else outputByConnector(source)
     local size = if output ~= nil then `  {output.width} × {output.height}` else ""
-    local label = if source == "screen" or source == "portal" then "Full screen" else source
+    local label = if source == "focused" then "Full screen" else source
     return label .. size
 end
 
@@ -714,7 +761,7 @@ local function resolveFocusedOutput(id)
                 break
             end
         end
-        arm(if first ~= "" then first else "screen", "")
+        arm(if first ~= "" then first else "focused", "")
     end, 5000)
 end
 
@@ -753,6 +800,7 @@ local function hideConfirmPanel()
 end
 
 local function clearArmed()
+    armed.origin = ""
     armed.source = ""
     armed.region = ""
     armed.isRegion = false
@@ -760,13 +808,14 @@ local function clearArmed()
 end
 
 -- Arm the recorder and show the confirmation bar. With confirmation off, start now.
-function arm(source, region)
+function arm(source, region, origin)
     if not confBool("confirm_before_recording", true) then
         return if launch(source, region) then "started" else "failed"
     end
     armed.source = source
     armed.region = region or ""
     armed.isRegion = armed.region ~= ""
+    armed.origin = origin or ""
     canvasLabel = canvasText(source, armed.region)
     setState("armed")
     publish()
@@ -811,12 +860,15 @@ local function useFullScreen()
         return "not-armed"
     end
     nextRequest()
-    return arm("screen", "")
+    local target = if armed.origin ~= "" then armed.origin else focusedConnector()
+    return arm(if target ~= nil then target else "focused", "", armed.origin)
 end
 
 -- ── Public actions ─────────────────────────────────────────────────────────
 
-local CAPTURE_MODES = { focused = true, primary = true, monitor = true, region = true, portal = true }
+-- "fullscreen" is the focused display: what the canvas bar's Full screen button and
+-- the popout's Full screen tile mean. "primary" stays the first monitor.
+local CAPTURE_MODES = { focused = true, fullscreen = true, primary = true, monitor = true, region = true, portal = true }
 
 local function begin(modeOverride)
     if recState == "armed" then
@@ -834,6 +886,12 @@ local function begin(modeOverride)
         mode = if CAPTURE_MODES[configured] then configured else "focused"
     end
 
+    if mode == "fullscreen" then
+        mode = "focused"
+    end
+
+    local origin = pendingOrigin
+    pendingOrigin = nil
     local id = nextRequest()
     setState("resolving")
 
@@ -841,11 +899,14 @@ local function begin(modeOverride)
         selectRegion(id, "notify.region-cancelled")
         return "selecting"
     end
+    if origin ~= nil and (mode == "focused") then
+        return arm(origin, "", origin)
+    end
     if mode == "portal" then
         return arm("portal", "")
     end
     if mode == "primary" then
-        return arm("screen", "")
+        return arm(firstMonitorConnector(), "")
     end
     if mode == "monitor" then
         local monitor = noctalia.string.trim(confString("monitor", ""))
@@ -970,6 +1031,15 @@ end
 
 -- ── Command dispatch ───────────────────────────────────────────────────────
 
+local START_ACTIONS = {
+    ["start"] = true,
+    ["start-capture"] = true,
+    ["start-fullscreen"] = true,
+    ["start-region"] = true,
+    ["start-portal"] = true,
+    ["start-focused"] = true,
+}
+
 local function handleAction(action, payload)
     if type(action) ~= "string" then
         return
@@ -983,7 +1053,7 @@ local function handleAction(action, payload)
     elseif action == "start-portal" then
         return begin("portal")
     elseif action == "start-fullscreen" then
-        return begin("primary")
+        return begin("fullscreen")
     elseif action == "start-focused" then
         return begin("focused")
     elseif action == "confirm" then
@@ -1105,13 +1175,26 @@ noctalia.state.watch("command", function(command)
     elseif type(command) == "string" then
         action = command
     end
+    -- Only a start consumes the sender's display; a stop or a pause must not leave
+    -- a stale monitor behind for the next recording.
+    if type(action) == "string" and START_ACTIONS[normalizeEvent(action)]
+        and type(command) == "table" and type(command.output) == "string"
+        and command.output ~= "" then
+        pendingOrigin = command.output
+    end
     if type(action) == "string" then
         log(`command '{action}'`)
         handleAction(normalizeEvent(action), nil)
     end
 end)
 
+function onOutputsChanged()
+    detectFirstMonitor()
+    publish()
+end
+
 log("service loaded")
 detectGpus()
 detectCapabilities()
+detectFirstMonitor()
 publish()
