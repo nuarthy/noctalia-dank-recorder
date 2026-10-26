@@ -73,8 +73,12 @@ full.
 | Right-click the bar pill | Open the popout with every control. |
 | Control-center tile | Toggle the recorder. |
 
+The glyph alone carries the state: a grey camera when idle, the same camera in the accent
+colour while a recording is armed and waiting for confirmation, a red stop square while it
+runs. A vertical pill shows no wording - the capsule only has room for numbers.
+
 On a vertical bar the pill stacks the timer the way the built-in clock stacks its time:
-minutes on the top line, seconds below (`0` / `42`), with a red stop square above them.
+minutes on the top line, seconds below (`0` / `42`), above nothing but the stop square.
 A horizontal bar gets the inline form instead (`0:42`). The control-center tile shows the
 same timer as its label while a recording runs, so the running time is visible wherever
 you started it.

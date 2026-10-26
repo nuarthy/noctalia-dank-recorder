@@ -58,7 +58,8 @@ local function glyphForState()
     if state == "resolving" then
         return "loader-2"
     elseif state == "armed" then
-        return "circle-check"
+        -- Keep the camera; the accent colour is what says "armed".
+        return "video"
     elseif state == "starting" then
         return "loader-2"
     elseif state == "recording" then
@@ -161,8 +162,9 @@ local function render()
     local caption = textForState()
 
     if vertical then
-        -- The DMS vertical pill kept the timer here too: a word like "Stop?" does not
-        -- fit the narrow capsule, and the warning colour plus tooltip carry the hint.
+        -- A vertical capsule only has room for numbers: the timer while recording, no
+        -- wording otherwise. The glyph colour and the tooltip carry the state, which is
+        -- what the DMS vertical pill did.
         if state == "recording" or state == "paused" then
             local top, bottom = timerLines(elapsed)
             children[#children + 1] = ui.label({
@@ -176,14 +178,6 @@ local function render()
                 text = bottom,
                 fontSize = 12,
                 color = "on_surface_variant",
-                textAlign = "center",
-            })
-        elseif caption ~= "" then
-            children[#children + 1] = ui.label({
-                text = caption,
-                fontSize = 12,
-                fontWeight = "bold",
-                color = "on_surface",
                 textAlign = "center",
             })
         end
