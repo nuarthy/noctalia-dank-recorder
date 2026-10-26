@@ -1,0 +1,220 @@
+# Dank Recorder - a screen recorder for Noctalia, driven by gpu-screen-recorder.
+#
+# Ported from github.com/nuarthy/dank-recorder (a Dank Material Shell plugin). The
+# recording logic, the canvas confirmation bar, the bar pill, the control-center
+# tile and the popout keep the behaviour of the original:
+#
+#   service.luau  headless [[service]]; owns the recorder process and the state
+#                 machine (idle / resolving / armed / starting / recording /
+#                 paused / stopping) and publishes it on the "status" channel.
+#   widget.luau   bar pill: state glyph + elapsed time, click to start or stop.
+#   shortcut.luau control-center tile mirroring the same state.
+#   popout.luau   right-click panel: Full screen / Region, pause, open recordings.
+#   confirm.luau  the canvas bar shown before a recording starts.
+#
+# Settings are plugin-level ([[setting]] at the root), so the service, the widget,
+# the tile and both panels read one set through noctalia.getConfig().
+
+id = "nuarthy/dank-recorder"
+name = "Dank Recorder"
+version = "1.0.0"
+plugin_api = 34
+author = "nuarthy"
+license = "MIT"
+icon = "video"
+description = "Screen recorder with a canvas confirmation bar, GPU encoding and a CPU fallback."
+tags = ["recording", "video", "screen", "gpu-screen-recorder"]
+dependencies = ["gpu-screen-recorder", "slurp"]
+
+# ── Capture ──────────────────────────────────────────────────────────────────
+
+[[setting]]
+key = "capture_target"
+type = "select"
+label_key = "settings.capture_target.label"
+description_key = "settings.capture_target.description"
+default = "focused"
+options = [
+  { value = "focused", label_key = "settings.capture_target.options.focused" },
+  { value = "primary", label_key = "settings.capture_target.options.primary" },
+  { value = "monitor", label_key = "settings.capture_target.options.monitor" },
+  { value = "region", label_key = "settings.capture_target.options.region" },
+  { value = "portal", label_key = "settings.capture_target.options.portal" },
+]
+
+[[setting]]
+key = "monitor"
+type = "string"
+label_key = "settings.monitor.label"
+description_key = "settings.monitor.description"
+default = ""
+visible_when = { key = "capture_target", values = ["monitor"] }
+
+[[setting]]
+key = "confirm_before_recording"
+type = "bool"
+label_key = "settings.confirm_before_recording.label"
+description_key = "settings.confirm_before_recording.description"
+default = true
+
+[[setting]]
+key = "frame_rate"
+type = "select"
+label_key = "settings.frame_rate.label"
+description_key = "settings.frame_rate.description"
+default = "60"
+options = [
+  { value = "30", label_key = "settings.frame_rate.options.30" },
+  { value = "60", label_key = "settings.frame_rate.options.60" },
+  { value = "120", label_key = "settings.frame_rate.options.120" },
+]
+
+[[setting]]
+key = "quality"
+type = "select"
+label_key = "settings.quality.label"
+description_key = "settings.quality.description"
+default = "very_high"
+options = [
+  { value = "medium", label_key = "settings.quality.options.medium" },
+  { value = "high", label_key = "settings.quality.options.high" },
+  { value = "very_high", label_key = "settings.quality.options.very_high" },
+  { value = "ultra", label_key = "settings.quality.options.ultra" },
+]
+
+[[setting]]
+key = "codec"
+type = "select"
+label_key = "settings.codec.label"
+description_key = "settings.codec.description"
+default = "h264"
+options = [
+  { value = "h264", label_key = "settings.codec.options.h264" },
+  { value = "hevc", label_key = "settings.codec.options.hevc" },
+  { value = "av1", label_key = "settings.codec.options.av1" },
+]
+
+[[setting]]
+key = "container"
+type = "select"
+label_key = "settings.container.label"
+description_key = "settings.container.description"
+default = "mp4"
+options = [
+  { value = "mp4", label_key = "settings.container.options.mp4" },
+  { value = "mkv", label_key = "settings.container.options.mkv" },
+]
+
+# ── Audio ────────────────────────────────────────────────────────────────────
+
+[[setting]]
+key = "audio_source"
+type = "select"
+label_key = "settings.audio_source.label"
+description_key = "settings.audio_source.description"
+default = "output"
+options = [
+  { value = "none", label_key = "settings.audio_source.options.none" },
+  { value = "output", label_key = "settings.audio_source.options.output" },
+  { value = "both", label_key = "settings.audio_source.options.both" },
+  { value = "input", label_key = "settings.audio_source.options.input" },
+]
+
+# ── Encoder ──────────────────────────────────────────────────────────────────
+
+[[setting]]
+key = "encoder_mode"
+type = "select"
+label_key = "settings.encoder_mode.label"
+description_key = "settings.encoder_mode.description"
+default = "auto"
+options = [
+  { value = "auto", label_key = "settings.encoder_mode.options.auto" },
+  { value = "cpu", label_key = "settings.encoder_mode.options.cpu" },
+]
+
+[[setting]]
+key = "gpu_preference"
+type = "select"
+label_key = "settings.gpu_preference.label"
+description_key = "settings.gpu_preference.description"
+default = "auto"
+options = [
+  { value = "auto", label_key = "settings.gpu_preference.options.auto" },
+  { value = "amd", label_key = "settings.gpu_preference.options.amd" },
+  { value = "nvidia", label_key = "settings.gpu_preference.options.nvidia" },
+  { value = "intel", label_key = "settings.gpu_preference.options.intel" },
+]
+
+[[setting]]
+key = "low_power"
+type = "bool"
+label_key = "settings.low_power.label"
+description_key = "settings.low_power.description"
+default = false
+
+# ── Output ───────────────────────────────────────────────────────────────────
+
+[[setting]]
+key = "record_cursor"
+type = "bool"
+label_key = "settings.record_cursor.label"
+description_key = "settings.record_cursor.description"
+default = true
+
+[[setting]]
+key = "notify"
+type = "bool"
+label_key = "settings.notify.label"
+description_key = "settings.notify.description"
+default = true
+
+[[setting]]
+key = "output_dir"
+type = "folder"
+label_key = "settings.output_dir.label"
+description_key = "settings.output_dir.description"
+default = ""
+
+# ── Entries ──────────────────────────────────────────────────────────────────
+
+[[service]]
+id = "service"
+entry = "service.luau"
+
+[[widget]]
+id = "recorder"
+entry = "widget.luau"
+
+[[shortcut]]
+id = "toggle"
+entry = "shortcut.luau"
+
+# Right-click popout. "auto" position plus open_near_click keeps it beside the bar
+# pill that opened it, like the DMS popout.
+[[panel]]
+id = "popout"
+entry = "popout.luau"
+width = 380
+height = 320
+placement = "floating"
+position = "auto"
+open_near_click = true
+
+# The canvas confirmation bar. Noctalia 5.3 tops out at plugin API 34, so a
+# [[layer]] (API 36) is unavailable: a persistent floating panel pinned to the
+# bottom centre gives the same surface - on screen only while a recording is armed,
+# and only its own rectangle takes pointer input. Persistent keeps it out of the
+# one-panel-at-a-time slot, outside clicks leave it alone, and on-demand keyboard
+# focus mirrors the DMS bar.
+[[panel]]
+id = "confirm"
+entry = "confirm.luau"
+width = 880
+height = 72
+placement = "floating"
+position = "bottom_center"
+dismiss_on_outside_click = false
+keyboard_focus = "on_demand"
+persistent = true
+layer = "overlay"

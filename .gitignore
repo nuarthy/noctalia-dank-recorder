@@ -1,0 +1,7 @@
+# Editor and OS noise
+*.swp
+*~
+.DS_Store
+
+# Per-user plugin state
+settings.json

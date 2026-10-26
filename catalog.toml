@@ -1,0 +1,11 @@
+[[plugin]]
+id           = "nuarthy/dank-recorder"
+name         = "Dank Recorder"
+version      = "1.0.0"
+author       = "nuarthy"
+license      = "MIT"
+icon         = "video"
+description  = "Screen recorder with a canvas confirmation bar, GPU encoding and a CPU fallback."
+plugin_api   = 34
+tags         = ["recording", "video", "screen"]
+dependencies = ["gpu-screen-recorder", "slurp"]
