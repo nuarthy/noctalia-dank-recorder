@@ -10,14 +10,15 @@
 --   idle       nothing running
 --   resolving  choosing the capture source (focused output, monitor list, slurp)
 --   armed      waiting for Start / Cancel on the confirmation bar
---   starting   a candidate command is running, inside its 2.5 s probe window
+--   starting   a candidate command is running, inside its 2.5 s probe window; the
+--              window ends early once the recorder writes its first bytes
 --   recording  the probe passed
 --   paused     SIGUSR2 sent, elapsed time frozen
 --   stopping   SIGINT sent, waiting for the process to flush and exit
 
 noctalia.setUpdateInterval(250)
 
-local PROBE_TICKS = 10 -- 2.5 s: a candidate that cannot capture dies inside this
+local PROBE_TICKS = 10 -- 2.5 s deadline: a candidate that cannot capture dies inside it
 local CHECK_TICKS = 4 -- 1 s liveness and elapsed refresh
 local LOG_TAIL_BYTES = 1500
 
@@ -508,6 +509,15 @@ local function isAlive(targetPid)
     end
     local stateChar = stat:sub(close + 2, close + 2)
     return stateChar ~= "Z" and stateChar ~= "X"
+end
+
+-- gpu-screen-recorder writes the container header as soon as the encoder opens, so a
+-- non-empty output file is proof that the capture is running. Measured on gsr 6.1.3:
+-- the file has bytes roughly 250-350 ms after launch. The probe window stays a deadline
+-- for the candidates that never get that far.
+local function captureStarted()
+    local info = noctalia.fileInfo(pendingFile)
+    return info ~= nil and info.isDir == false and info.size > 0
 end
 
 local function signal(targetPid, name)
@@ -1144,15 +1154,20 @@ function update()
     tick += 1
 
     if recState == "starting" then
-        if tick - startTick >= PROBE_TICKS then
-            if pid <= 0 then
-                pid = readPid()
-            end
-            if isAlive(pid) then
-                beginRecording()
-            else
-                advanceCandidate()
-            end
+        if pid <= 0 then
+            pid = readPid()
+        end
+        local alive = isAlive(pid)
+        local settled = tick - startTick >= PROBE_TICKS
+        -- The probe window is a deadline, not a wait. Once the recorder has written its
+        -- first bytes the recording is running, and saying so now is what puts the
+        -- notification on screen at the start of the file instead of seconds into it.
+        if alive and (settled or captureStarted()) then
+            beginRecording()
+        elseif not alive and (settled or pid > 0) then
+            -- A pid that is already gone died inside the window; try the next candidate
+            -- instead of idling out the rest of it.
+            advanceCandidate()
         end
     elseif recState == "recording" or recState == "paused" then
         if tick % CHECK_TICKS == 0 then
