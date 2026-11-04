@@ -17,8 +17,8 @@
 
 id = "nuarthy/dank-recorder"
 name = "Dank Recorder"
-version = "1.0.0"
-plugin_api = 34
+version = "1.1.0"
+plugin_api = 36
 author = "nuarthy"
 license = "MIT"
 icon = "video"
@@ -40,6 +40,17 @@ options = [
   { value = "monitor", label_key = "settings.capture_target.options.monitor" },
   { value = "region", label_key = "settings.capture_target.options.region" },
   { value = "portal", label_key = "settings.capture_target.options.portal" },
+]
+
+[[setting]]
+key = "confirm_position"
+type = "select"
+label_key = "settings.confirm_position.label"
+description_key = "settings.confirm_position.description"
+default = "bottom"
+options = [
+  { value = "bottom", label_key = "settings.confirm_position.options.bottom" },
+  { value = "top", label_key = "settings.confirm_position.options.top" },
 ]
 
 [[setting]]
@@ -186,6 +197,14 @@ entry = "service.luau"
 id = "recorder"
 entry = "widget.luau"
 
+# Shown in the bar widget's own settings menu (middle-click the pill on the bar).
+[[widget.setting]]
+key = "show_when_idle"
+type = "bool"
+label_key = "settings.show_when_idle.label"
+description_key = "settings.show_when_idle.description"
+default = false
+
 [[shortcut]]
 id = "toggle"
 entry = "shortcut.luau"
@@ -201,20 +220,23 @@ placement = "floating"
 position = "auto"
 open_near_click = true
 
-# The canvas confirmation bar. Noctalia 5.3 tops out at plugin API 34, so a
-# [[layer]] (API 36) is unavailable: a persistent floating panel pinned to the
-# bottom centre gives the same surface - on screen only while a recording is armed,
-# and only its own rectangle takes pointer input. Persistent keeps it out of the
-# one-panel-at-a-time slot, outside clicks leave it alone, and on-demand keyboard
-# focus mirrors the DMS bar.
-[[panel]]
+# The canvas confirmation bar. It is a [[layer]] (plugin API 36) so the plugin owns its
+# geometry: the service centres it on an edge with noctalia.layer.configure() before it
+# shows the bar, and its Move control swaps the bottom and top edges. That is what makes
+# the bar movable - a [[panel]] is host-placed and cannot be moved at all.
+#
+# The layer is on screen only while a recording is armed, never takes keyboard focus,
+# and reserves no screen space (exclusive_zone = 0).
+[[layer]]
 id = "confirm"
 entry = "confirm.luau"
-width = 880
-height = 72
-placement = "floating"
-position = "bottom_center"
-dismiss_on_outside_click = false
-keyboard_focus = "on_demand"
-persistent = true
 layer = "overlay"
+anchors = ["top", "left"]
+width = 960
+height = 56
+margins = { top = 0, left = 0 }
+exclusive_zone = 0
+keyboard = "none"
+output = "focused"
+visible = false
+

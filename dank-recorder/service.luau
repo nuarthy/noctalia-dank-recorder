@@ -22,8 +22,13 @@ local PROBE_TICKS = 10 -- 2.5 s deadline: a candidate that cannot capture dies i
 local CHECK_TICKS = 4 -- 1 s liveness and elapsed refresh
 local LOG_TAIL_BYTES = 1500
 
-local PLUGIN_ID = "nuarthy/dank-recorder"
-local CONFIRM_PANEL = PLUGIN_ID .. ":confirm"
+-- The confirmation bar's [[layer]] entry. Layers are addressed by their local id.
+local CONFIRM_LAYER = "confirm"
+-- Surface width in logical px, matching the [[layer]] entry in plugin.toml. The bar is
+-- centred with it, so the placement needs no height.
+local CONFIRM_WIDTH = 960
+-- Gap between the bar and the output edge it sits on.
+local CONFIRM_INSET = 24
 
 -- ── Small helpers ──────────────────────────────────────────────────────────
 
@@ -88,6 +93,7 @@ end
 
 local pidFile = runtimeDir() .. "/recorder.pid"
 local logFile = runtimeDir() .. "/gpu-screen-recorder.log"
+local positionFile = runtimeDir() .. "/confirm_position"
 
 local function outputDirectory()
     local configured = noctalia.string.trim(confString("output_dir", ""))
@@ -208,6 +214,10 @@ local candidateIndex = 1
 local startTick = 0
 local startedAtMs = 0
 local baseElapsedMs = 0
+-- The edge the confirmation bar sits on, and the value the setting had when it was read,
+-- so an unrelated settings change does not undo a Move.
+local confirmPosition = "bottom"
+local confirmSetting = "bottom"
 
 local gpus = {}
 local gpuSummary = ""
@@ -238,6 +248,7 @@ local function publish()
         gpus = gpuSummary,
         caps = capsSummary,
         outputDir = outputDirectory(),
+        position = confirmPosition,
     })
 end
 
@@ -798,16 +809,112 @@ end
 
 -- ── Confirmation bar ───────────────────────────────────────────────────────
 
--- Open and close are separate commands rather than a toggle: the service cannot see
--- the host's panel state, and a toggle would close the bar whenever it was already up
--- (a service restart while armed, for example). `panel-open` and `panel-close` are
--- idempotent, so the state machine stays the only source of truth.
+-- The bar is a [[layer]], so its geometry is the plugin's: it is centred and anchored to
+-- one edge, and the margin below sets the gap. Noctalia hands a layer's script no pointer
+-- events except the ones its own controls consume, so the bar cannot be dragged; the Move
+-- control on the bar swaps the edge instead, and the choice is kept in the plugin data
+-- directory so the next recording starts where the last one did.
+
+-- Anything an earlier version saved as a screen anchor collapses to the edge it names.
+local function normalizePosition(name)
+    if name == "top" or name == "bottom" then
+        return name
+    end
+    if type(name) == "string" and name:find("^top") then
+        return "top"
+    end
+    return "bottom"
+end
+
+local function isCaptureSource(name)
+    return name == "focused" or name == "region" or name == "portal"
+end
+
+-- The Move control wins over the setting for the rest of the session, so the position is
+-- kept in the plugin data directory rather than in the config a plugin cannot write.
+local function configuredPosition()
+    return normalizePosition(confString("confirm_position", "bottom"))
+end
+
+local function loadConfirmPosition()
+    local saved = noctalia.readFile(positionFile)
+    if saved ~= nil then
+        return normalizePosition(noctalia.string.trim(saved))
+    end
+    return configuredPosition()
+end
+
+local function saveConfirmPosition(name)
+    noctalia.runAsync(`printf '%s' {shq(name)} > {shq(positionFile)}`)
+end
+
+confirmSetting = configuredPosition()
+confirmPosition = loadConfirmPosition()
+
+-- The output the armed canvas covers, so the bar appears on the display that will be
+-- recorded rather than on whichever one has keyboard focus.
+local function confirmOutput()
+    local source = armed.origin
+    if source == "" and not isCaptureSource(armed.source) then
+        source = armed.source
+    end
+    if source ~= "" and not isCaptureSource(source) then
+        local output = outputByConnector(source)
+        if output ~= nil then
+            return output
+        end
+    end
+    return focusedOutput()
+end
+
+-- Anchors and margins for one edge. A bottom position anchors to the bottom edge, so the
+-- compositor places the bar above the shell's own bar and dock instead of over them. The
+-- bar is centred on the output either way.
+local function edgePlacement(position, width)
+    local left = math.max(0, math.floor((width - CONFIRM_WIDTH) / 2))
+    if position == "top" then
+        return { "top", "left" }, { top = CONFIRM_INSET, left = left }
+    end
+    return { "bottom", "left" }, { bottom = CONFIRM_INSET, left = left }
+end
+
+local function applyConfirmPlacement()
+    local output = confirmOutput()
+    local width = CONFIRM_WIDTH
+    local target = "focused"
+    if output ~= nil then
+        local scale = if type(output.scale) == "number" and output.scale > 0 then output.scale else 1
+        width = math.floor((output.width or 0) / scale)
+        target = output.name
+    end
+    local anchors, margins = edgePlacement(confirmPosition, width)
+    noctalia.layer.configure(CONFIRM_LAYER, {
+        output = target,
+        anchors = anchors,
+        margins = margins,
+    })
+end
+
 local function showConfirmPanel()
-    noctalia.runAsync({ "noctalia", "msg", "panel-open", CONFIRM_PANEL })
+    applyConfirmPlacement()
+    noctalia.layer.show(CONFIRM_LAYER)
 end
 
 local function hideConfirmPanel()
-    noctalia.runAsync({ "noctalia", "msg", "panel-close", CONFIRM_PANEL })
+    noctalia.layer.hide(CONFIRM_LAYER)
+end
+
+-- Swap the bar between the top and bottom edges. The status channel carries the new
+-- position so the bar can label its Move control.
+local function moveConfirm()
+    confirmPosition = if confirmPosition == "top" then "bottom" else "top"
+    log(`confirm bar position -> {confirmPosition}`)
+    saveConfirmPosition(confirmPosition)
+    if recState == "armed" then
+        applyConfirmPlacement()
+    end
+    publish()
+    return confirmPosition
 end
 
 local function clearArmed()
@@ -1060,6 +1167,7 @@ local function statusJson()
         gpus = gpuSummary,
         caps = capsSummary,
         outputDir = outputDirectory(),
+        position = confirmPosition,
         pid = pid,
     })
 end
@@ -1112,6 +1220,8 @@ local function handleAction(action, payload)
         return useFullScreen()
     elseif action == "cycle-output" or action == "next-output" then
         return cycleOutput()
+    elseif action == "move-confirm" or action == "next-position" then
+        return moveConfirm()
     elseif action == "stop" then
         return requestStop()
     elseif action == "toggle" then
@@ -1204,6 +1314,17 @@ end
 function onConfigChanged()
     log("settings changed")
     audioOverride = nil
+    -- The setting wins over a position the Move control saved earlier, so changing it in
+    -- the settings GUI always takes effect.
+    local configured = configuredPosition()
+    if configured ~= confirmSetting then
+        confirmSetting = configured
+        confirmPosition = configured
+        saveConfirmPosition(configured)
+        if recState == "armed" then
+            applyConfirmPlacement()
+        end
+    end
     detectGpus()
     detectCapabilities()
     publish()

@@ -1,14 +1,15 @@
 --!nonstrict
--- Dank Recorder - the canvas confirmation bar ([[panel]] "confirm").
+-- Dank Recorder - the canvas confirmation bar ([[layer]] "confirm").
 --
 -- Shown by the service while a recording is armed. It reports the canvas that will
 -- be captured and offers the same five actions as the DMS bar: Full screen, Region,
--- Sound/Muted, Cancel and Start recording.
+-- Sound/Muted, Cancel and Start recording, plus Move.
 --
--- Noctalia 5.3 supports plugin API 34, so this is a persistent floating panel
--- pinned to the bottom centre rather than a layer surface: the plugin cannot drag
--- it, but it exists only while armed, sits in the overlay layer, and takes keyboard
--- focus only when clicked - the same on-demand focus the DMS bar used.
+-- The bar is a layer surface, so the plugin owns its geometry: the service places it
+-- with noctalia.layer.configure() before it shows the bar, and the Move control swaps it
+-- between the bottom and top edges. Noctalia gives a layer's script pointer events only
+-- through its own controls, so the bar cannot be dragged by its background; Move is the
+-- equivalent, and the edge it picks is remembered for the next recording.
 
 local status = {}
 
@@ -38,6 +39,10 @@ function cmdCycleOutput()
     send("cycle-output")
 end
 
+function cmdMove()
+    send("move-confirm")
+end
+
 function cmdAudio()
     send("toggle-audio")
 end
@@ -56,23 +61,31 @@ end
 
 local function render()
     if not isArmed() then
-        -- The service closes the bar on confirm or cancel; closing here as well keeps a
-        -- panel that outlived its armed state from staying on screen.
-        panel.close()
+        -- The service hides the layer on confirm or cancel; an empty tree keeps a bar
+        -- that outlived its armed state from showing a stale canvas.
+        layer.render(ui.box({ width = 1, height = 1 }))
         return
     end
 
     local canvas = status.canvas or ""
     local target = status.target or tr("confirm.live-desktop")
+    -- Move swaps the bar between the two edges, so the tooltip names where it goes.
+    local moveTooltip = if (status.position or "bottom") == "top" then tr("confirm.move-down-tooltip") else tr("confirm.move-up-tooltip")
     local audioText = status.audioText or tr("audio.sound")
     local audioIcon = status.audioIcon or "volume"
     local audioOn = status.audioOn == true
     local isRegion = status.isRegion == true
 
-    -- The shell's panel supplies its own inset; the plugin adds none, and the flexible
-    -- centred root keeps the gaps above and below the controls equal.
-    panel.render(ui.column({
+    -- The layer gives the bar its exact size, so the card is drawn here: one row of
+    -- controls, centred in a rounded surface.
+    layer.render(ui.column({
         flexGrow = 1,
+        fill = "surface_container",
+        radius = 14,
+        border = "outline",
+        borderWidth = 1,
+        paddingH = 14,
+        paddingV = 7,
         justify = "center",
     }, {
         ui.row({ height = 42, gap = 8, align = "center" }, {
@@ -100,6 +113,13 @@ local function render()
                 }),
             }),
             ui.spacer({ flexGrow = 1 }),
+            ui.button({
+                glyph = "arrows-move",
+                variant = "ghost",
+                controlSize = "md",
+                tooltip = moveTooltip,
+                onClick = "cmdMove",
+            }),
             ui.button({
                 glyph = "device-desktop",
                 variant = "secondary",
@@ -148,10 +168,6 @@ local function render()
             }),
         }),
     }))
-end
-
-function onOpen()
-    render()
 end
 
 status = noctalia.state.get("status") or {}

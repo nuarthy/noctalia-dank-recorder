@@ -13,12 +13,12 @@ continues on the CPU.
 | Field | Value |
 | --- | --- |
 | ID | `nuarthy/dank-recorder` |
-| Plugin API | 34 |
-| Entries | service `service`, bar widget `recorder`, shortcut `toggle`, panels `popout` and `confirm` |
+| Plugin API | 36 |
+| Entries | service `service`, bar widget `recorder`, shortcut `toggle`, panel `popout`, layer `confirm` |
 
 ## Requirements
 
-- Noctalia v5.3.0 or later
+- Noctalia v5.4.1 or later (the canvas bar is a `[[layer]]`, plugin API 36)
 - `gpu-screen-recorder` on `PATH` (the native package, not the Flatpak GUI build)
 - `slurp` for region selection (optional)
 - A working PipeWire session for audio (optional)
@@ -38,7 +38,7 @@ Noctalia loads plugins from `$XDG_DATA_HOME/noctalia/plugins/<plugin>`. Symlink 
 checkout there, then enable the plugin once:
 
 ```shell
-ln -sfn ~/Projects/noctalia-dank-recorder ~/.local/share/noctalia/plugins/dank-recorder
+ln -sfn ~/Projects/noctalia-dank-recorder/dank-recorder ~/.local/share/noctalia/plugins/dank-recorder
 noctalia msg plugins enable nuarthy/dank-recorder
 ```
 
@@ -77,6 +77,12 @@ The glyph alone carries the state: a grey camera when idle, the same camera in t
 colour while a recording is armed and waiting for confirmation, a red stop square while it
 runs. A vertical pill shows no wording - the capsule only has room for numbers.
 
+**The pill is on the bar only while a recording is active.** That is the widget setting
+**Keep the pill on the bar while idle**, off by default; turn it on from the pill's own
+settings (middle-click the pill, or **Settings → Bar**) to keep a camera you can click to
+start a recording. A hidden pill takes no space and no clicks, so start from a keybinding,
+the control-center tile or the popout instead.
+
 On a vertical bar the pill stacks the timer the way the built-in clock stacks its time:
 minutes on the top line, seconds below (`0` / `42`), above nothing but the stop square.
 A horizontal bar gets the inline form instead (`0:42`). The control-center tile shows the
@@ -97,26 +103,24 @@ otherwise the pill returns to the elapsed time.
 
 ### Canvas confirmation bar
 
-Before a recording starts, a bar appears at the bottom centre of the screen. It shows the
-canvas that will be captured and offers five actions:
+Before a recording starts, a bar appears over the screen that will be captured. It shows
+the canvas and offers six actions:
 
-The plugin adds no padding of its own. Noctalia gives every panel a fixed inset, and it
-places a tree whose height it has to infer slightly low - an auto-height row ended up
-13 px from the top edge and 7 px from the bottom. Declaring the row's height
-(`height = 42`) removes that guesswork: the measured margins are 15 px above and 16 px
-below at 1.2 scale, i.e. equal within a pixel. Panel `height` values between 36 and 200
-all render the same card, so the inset itself is not something a plugin can remove.
-Place the bar at any screen anchor through the panel's injected **Position** setting
-(**Settings → Plugins → Dank Recorder**, or the `confirm_position` key below);
-`bottom_center` is the default.
+The bar is a `[[layer]]`, so the plugin owns its geometry: the surface is exactly the card,
+it appears on the display that will be recorded, and it reserves no screen space. It is
+centred horizontally and sits along one edge - the bottom, or the top. **Move** swaps the
+two edges, and the service remembers the choice, so the next recording starts in the same
+place. The bottom position anchors to the bottom edge, which keeps the bar above the
+shell's own bar instead of over it.
 
-```toml
-[plugin_settings."nuarthy/dank-recorder"]
-confirm_position = "bottom_left" # top_left … bottom_right, center
-```
+Noctalia gives a layer's script no pointer events except the ones its own controls consume,
+so the bar cannot be dragged by its background: **Move** is the equivalent control. The
+starting edge is the **Canvas bar position** setting under **Settings → Plugins → Dank
+Recorder**; changing it there takes precedence over the last **Move**.
 
 | Button | Result |
 | --- | --- |
+| Move (arrows) | Swap the bar between the bottom and top edges. The choice is remembered. |
 | Display (monitor icon) | Step the target to the next connected display; the canvas label follows. Enabled when more than one display is connected. |
 | Full screen | Capture the whole focused display. Enabled while a region is selected. |
 | Region | Select the canvas again with `slurp`. |
@@ -124,8 +128,9 @@ confirm_position = "bottom_left" # top_left … bottom_right, center
 | Cancel | Discard the pending recording. |
 | Start recording | Begin the recording. |
 
-Only the bar itself takes pointer input, and it takes keyboard focus only when clicked.
-Turn the step off with **Confirm before recording**.
+Only the bar itself takes pointer input, and it never takes keyboard focus, so a recording
+started from here does not steal the keyboard from the window underneath. Turn the whole
+step off with **Confirm before recording**.
 
 Recordings are saved to `~/Videos/Screencasts` by default, or to the XDG videos folder's
 `Screencasts` subdirectory when `XDG_VIDEOS_DIR` is set.
@@ -162,6 +167,7 @@ noctalia msg plugin nuarthy/dank-recorder:service all cancel         # Discard t
 noctalia msg plugin nuarthy/dank-recorder:service all reselect       # Select the region again
 noctalia msg plugin nuarthy/dank-recorder:service all fullscreen     # Use the whole armed display as the canvas
 noctalia msg plugin nuarthy/dank-recorder:service all cycle-output   # Step the armed target to the next display
+noctalia msg plugin nuarthy/dank-recorder:service all move-confirm   # Swap the canvas bar between the bottom and top edges
 noctalia msg plugin nuarthy/dank-recorder:service all stop           # Stop and save
 noctalia msg plugin nuarthy/dank-recorder:service all toggle         # Start or stop
 noctalia msg plugin nuarthy/dank-recorder:service all pause          # Pause or resume
@@ -181,6 +187,7 @@ return channel.
 | Setting | Default | Notes |
 | --- | --- | --- |
 | Confirm before recording | On | Show the canvas bar before each recording. |
+| Canvas bar position | Bottom | Show the canvas bar along the bottom or the top edge. The bar's **Move** control swaps the two. |
 | Capture target | Focused output | Focused output, first monitor, a named monitor, a region, or the portal. |
 | Monitor name | empty | Connector name such as `eDP-1` or `HDMI-A-1`. |
 | Frame rate | 60 | 30, 60, or 120 FPS. |
@@ -194,6 +201,10 @@ return channel.
 | Low power mode | Off | Lets the AMD GPU drop to a lower power state. |
 | Notifications | On | Show a notification when a recording starts, stops, or fails. |
 | Output folder | empty | Empty uses the XDG videos folder, or `~/Videos/Screencasts`. |
+
+The bar pill also has one setting of its own, in its widget menu (**Keep the pill on the
+bar while idle**, off by default). Each pill instance keeps its own copy, so a pill on one
+bar can stay visible while another one stays out of the way.
 
 ## How the GPU fallback works
 
@@ -212,29 +223,31 @@ uses two mechanisms:
 2. **Encoder fallback.** Every attempt passes `-fallback-cpu-encoding yes`, so a missing
    or failing GPU encoder drops to the CPU.
 
-The plugin keeps a candidate list. When the preferred candidate exits inside its 2.5 s
-probe window, the next candidate runs; the last one always allows the CPU fallback. The
+The plugin keeps a candidate list. The 2.5 s probe window is a deadline, not a fixed wait:
+as soon as the recorder has written its container header, 250-350 ms after launch, the
+recording counts as running, so the pill, the timer and the **Recording started**
+notification follow the first frames instead of trailing them by the rest of the window. A
+candidate that dies before that hands over to the next one at once. A candidate that is
+still alive at the deadline is accepted without a file, which is what the portal target
+looks like while its picker is open. The last candidate always allows the CPU fallback. The
 recorder's own output is captured in
 `~/.local/state/noctalia/plugins/data/nuarthy/dank-recorder/gpu-screen-recorder.log`, and
 its last lines appear in the failure notification.
 
 ## Differences from the DMS plugin
 
-The recording logic, states, button set, labels, and timings are the same. Three things
-differ because the host platform does:
+The recording logic, states, button set and labels are the same. One timing changed: the
+probe window ends when the recorder writes its first bytes instead of always running for
+2.5 s, so the start notification is not late (see
+[How the GPU fallback works](#how-the-gpu-fallback-works)). Three things differ because the
+host platform does:
 
-- **The canvas bar is a panel, not a layer surface.** Noctalia 5.3 supports plugin API 34
-  and `[[layer]]` needs 36, so the bar is a persistent floating `[[panel]]`. It has the
-  same contents and appears only while armed, but the plugin cannot drag it: a panel's
-  geometry is host-owned, and the only positional control is the screen anchor above.
-  The bar carries no padding of its own; the shell's panel inset sets the margin (15/16 px
-  at these control sizes) and no plugin-side value changes it - negative padding is
-  ignored, and panel heights from 36 to 200 px render the same card. Assigning the row an
-  explicit height is what keeps the top and bottom margins equal.
-  On a Noctalia that supports plugin API 36 the entry can be swapped for a `[[layer]]`
-  with `anchors = ["bottom"]`, `height = 0` and `exclusive_zone = -1`, which drops the
-  panel chrome; the plugin API still has no pointer-drag hook, so drag-to-move would come
-  only from the shell.
+- **The canvas bar is a layer the plugin places, and Move replaces dragging.** The DMS bar
+  could be dragged by its background. Noctalia's plugin API has no pointer press, move or
+  release on a container - only its own controls (buttons, sliders, graphs) receive
+  pointer input - so a bar script cannot follow a drag. The bar is therefore a `[[layer]]`
+  whose position the service sets with `noctalia.layer.configure()`, and its **Move**
+  control swaps it between the bottom and top edges. Nothing else about the bar changed.
 - **Sound is a session mute.** Plugins cannot write their own settings, so the Sound
   button overrides the Audio setting until the shell restarts instead of persisting
   `none`.

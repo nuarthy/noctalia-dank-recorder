@@ -8,6 +8,11 @@
 --   right click  open the popout panel
 -- The glyph and its colour follow the recorder state; the elapsed time is shown
 -- while a recording runs.
+--
+-- "Keep the pill on the bar while idle" (this widget's own setting) decides whether the
+-- pill stays put while nothing is recording. With it off - the default - the pill is on
+-- the bar only while a recording is starting, running, paused or stopping, so it stops
+-- holding a slot of bar space for something you touch once per session.
 
 local state = "idle"
 local elapsed = 0
@@ -49,6 +54,20 @@ end
 
 local function isConfirmingStop()
     return confirmStopUntil > 0 and noctalia.nowMs() < confirmStopUntil
+end
+
+-- Read once per load: a change to this setting rebuilds the widget.
+local showWhenIdle = noctalia.getConfig("show_when_idle") == true
+
+-- States that belong to a running session. The pill also shows during the 3 s "Stop?"
+-- window, which is part of a recording.
+local SESSION_STATES = { starting = true, recording = true, paused = true, stopping = true }
+
+local function shouldShow()
+    if showWhenIdle or isConfirmingStop() then
+        return true
+    end
+    return SESSION_STATES[state] == true
 end
 
 local function glyphForState()
@@ -157,6 +176,10 @@ end
 -- barWidget.render replaces the built-in glyph/text row, so every state is built as a
 -- tree: a column on a vertical bar (glyph above the timer), a row on a horizontal one.
 local function render()
+    -- Hiding the pill is how the setting keeps the bar clean; the shell gives back the
+    -- space as soon as it is hidden.
+    barWidget.setVisible(shouldShow())
+
     local vertical = stackedTimer
     local children = { glyphNode() }
     local caption = textForState()

@@ -10,6 +10,11 @@
   "settings.monitor.label": "Monitor name",
   "settings.monitor.description": "Connector name, for example eDP-1 or HDMI-A-1. Run gpu-screen-recorder --list-monitors to list them.",
 
+  "settings.confirm_position.label": "Canvas bar position",
+  "settings.confirm_position.description": "Show the canvas bar along the bottom edge or the top edge of the screen. The bar's Move control swaps the two and remembers the last one.",
+  "settings.confirm_position.options.bottom": "Bottom",
+  "settings.confirm_position.options.top": "Top",
+
   "settings.confirm_before_recording.label": "Confirm before recording",
   "settings.confirm_before_recording.description": "Show the canvas bar with the size that will be captured and Start and Cancel before the recording begins.",
 
@@ -65,6 +70,9 @@
   "settings.notify.label": "Notifications",
   "settings.notify.description": "Show a notification when a recording starts, stops, or fails.",
 
+  "settings.show_when_idle.label": "Keep the pill on the bar while idle",
+  "settings.show_when_idle.description": "Off hides the bar pill unless a recording is starting, running, paused or stopping. Turn it on to keep a pill you can click to start a recording.",
+
   "settings.output_dir.label": "Output folder",
   "settings.output_dir.description": "Leave empty for the XDG videos folder, or ~/Videos/Screencasts.",
 
@@ -84,6 +92,8 @@
   "confirm.region": "Region",
   "confirm.region-tooltip": "Select the area to capture again",
   "confirm.audio-tooltip": "Include desktop audio or mute it",
+  "confirm.move-up-tooltip": "Move the bar to the top",
+  "confirm.move-down-tooltip": "Move the bar to the bottom",
   "confirm.cancel": "Cancel",
   "confirm.start": "Start recording",
 
