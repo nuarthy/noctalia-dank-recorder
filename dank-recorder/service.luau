@@ -218,6 +218,10 @@ local baseElapsedMs = 0
 -- so an unrelated settings change does not undo a Move.
 local confirmPosition = "bottom"
 local confirmSetting = "bottom"
+-- The display the bar is configured for, published so the bar can name it. The bar is on
+-- screen only while armed, so this is what tells a bar on the wrong display apart from a
+-- canvas that was resolved for another one.
+local confirmDisplay = ""
 
 local gpus = {}
 local gpuSummary = ""
@@ -249,6 +253,7 @@ local function publish()
         caps = capsSummary,
         outputDir = outputDirectory(),
         position = confirmPosition,
+        display = confirmDisplay,
     })
 end
 
@@ -942,6 +947,7 @@ local function applyConfirmPlacement()
         target = output.name
     end
     local anchors, margins = edgePlacement(confirmPosition, width)
+    confirmDisplay = target
     -- The layer is per output, so this line names the display the bar lands on: it is what
     -- tells a misplaced bar apart from a canvas that was resolved for another display.
     log(`confirm bar on {target}`)
@@ -950,11 +956,6 @@ local function applyConfirmPlacement()
         anchors = anchors,
         margins = margins,
     })
-end
-
-local function showConfirmPanel()
-    applyConfirmPlacement()
-    noctalia.layer.show(CONFIRM_LAYER)
 end
 
 local function hideConfirmPanel()
@@ -998,9 +999,12 @@ function arm(source, region, origin)
     armed.isRegion = armed.region ~= ""
     armed.origin = origin or ""
     canvasLabel = canvasText(source, armed.region)
+    -- Place before publishing: the status the bar reads then names the display the bar was
+    -- configured for, so the bar can show it and a wrong target is visible on screen.
+    applyConfirmPlacement()
     setState("armed")
     publish()
-    showConfirmPanel()
+    noctalia.layer.show(CONFIRM_LAYER)
     return "armed"
 end
 

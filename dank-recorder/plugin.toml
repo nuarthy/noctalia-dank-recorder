@@ -17,7 +17,7 @@
 
 id = "nuarthy/dank-recorder"
 name = "Dank Recorder"
-version = "1.1.0"
+version = "1.1.1"
 plugin_api = 36
 author = "nuarthy"
 license = "MIT"

@@ -69,6 +69,10 @@ local function render()
 
     local canvas = status.canvas or ""
     local target = status.target or tr("confirm.live-desktop")
+    -- The connector of the display the service placed this bar on. It is drawn on the bar so
+    -- a bar that landed on the wrong monitor can be told apart from a canvas resolved for
+    -- another one without reading the log.
+    local display = status.display or ""
     -- Move swaps the bar between the two edges, so the tooltip names where it goes.
     local moveTooltip = if (status.position or "bottom") == "top" then tr("confirm.move-down-tooltip") else tr("confirm.move-up-tooltip")
     local audioText = status.audioText or tr("audio.sound")
@@ -113,6 +117,21 @@ local function render()
                 }),
             }),
             ui.spacer({ flexGrow = 1 }),
+            ui.column({
+                paddingH = if display ~= "" then 9 else 0,
+                paddingV = if display ~= "" then 4 else 0,
+                radius = 8,
+                fill = if display ~= "" then "primary/0.14" else nil,
+                align = "center",
+                justify = "center",
+            }, {
+                ui.label({
+                    text = display,
+                    fontSize = 11,
+                    fontWeight = "semibold",
+                    color = "primary",
+                }),
+            }),
             ui.button({
                 glyph = "arrows-move",
                 variant = "ghost",
