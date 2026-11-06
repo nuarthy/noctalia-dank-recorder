@@ -95,8 +95,14 @@ it.
 
 The pill records the display **its bar sits on**: the command carries
 `barWidget.outputName()`, so a pill on a second monitor captures that monitor even when
-keyboard focus is elsewhere. Keybindings and the control-center tile have no display of
-their own and follow the focused output.
+keyboard focus is elsewhere. The control-center tile sends `noctalia.focusedOutputName()`
+from its own script snapshot, which the service cannot see on the command channel, and the
+popout inherits the display of the pill that opened it. A keybinding or `noctalia msg`
+start has no display of its own and follows the focused output; pass a connector
+(`start HDMI-A-1`) to pin one.
+
+The canvas bar shows the connector it was placed on, as a chip beside **Move**, so the bar
+names its display while the screen shows where it actually appeared.
 
 Clicking a recording pill shows `Stop?`. Click it again within three seconds to stop;
 otherwise the pill returns to the elapsed time.

@@ -10,8 +10,14 @@ local function tr(key)
     return noctalia.tr(key)
 end
 
+-- The display this popout belongs to. The pill hands it over when it opens the panel, so a
+-- full-screen start from here captures the display the pill sits on. A popout opened by IPC
+-- or a keybind has no pill and leaves this nil, which falls back to the focused output.
+-- The hand-over is consumed on open, so a later keybind-opened popout never reuses it.
+local origin = nil
+
 local function send(action, closeAfter)
-    noctalia.state.set("command", { action = action })
+    noctalia.state.set("command", { action = action, output = origin })
     if closeAfter then
         panel.close()
     end
@@ -276,6 +282,9 @@ local function render()
 end
 
 function onOpen()
+    local handed = noctalia.state.get("popout-display")
+    origin = if type(handed) == "string" and handed ~= "" then handed else nil
+    noctalia.state.set("popout-display", nil)
     render()
 end
 

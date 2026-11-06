@@ -61,12 +61,18 @@ local function applyStatus(status)
     render()
 end
 
+-- The tile's script snapshot carries the interactive output, while the service's command
+-- channel does not, so every command reports the display the control center was opened on.
+-- A start from the tile then captures that display instead of the recorder's first monitor.
 function onClick()
-    noctalia.state.set("command", { action = "toggle" })
+    noctalia.state.set("command", { action = "toggle", output = noctalia.focusedOutputName() })
 end
 
 function onRightClick()
-    noctalia.state.set("command", { action = if recording then "pause" else "start" })
+    noctalia.state.set("command", {
+        action = if recording then "pause" else "start",
+        output = noctalia.focusedOutputName(),
+    })
 end
 
 applyStatus(noctalia.state.get("status"))

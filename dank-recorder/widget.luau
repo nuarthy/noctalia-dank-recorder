@@ -260,6 +260,9 @@ function onClick()
 end
 
 function onRightClick()
+    -- The popout has no display of its own, so hand it this pill's before opening it: that
+    -- is what makes the popout's Full screen tile capture the display the pill sits on.
+    noctalia.state.set("popout-display", barWidget.outputName())
     noctalia.togglePanel("nuarthy/dank-recorder:popout")
 end
 

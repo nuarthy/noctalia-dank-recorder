@@ -812,6 +812,19 @@ local function resolveFocusedOutput(id)
         end
         return
     end
+    -- A [[service]] gets no focused-output snapshot from the host, so this call returns nil
+    -- for a start that arrives over the command channel. The output the host last treated as
+    -- interactive is still in noctalia.outputs(), and it beats the recorder's own first
+    -- monitor: `gpu-screen-recorder --list-monitors` lists the main display first, which on
+    -- a laptop plus external monitor is the internal panel every single time.
+    local flagged = focusedOutput()
+    if flagged ~= nil then
+        log(`focused output from the output list: {flagged.name}`)
+        if id == requestId then
+            arm(flagged.name, "")
+        end
+        return
+    end
     noctalia.runAsync({ "gpu-screen-recorder", "--list-monitors" }, function(result)
         if id ~= requestId or recState ~= "resolving" then
             return
@@ -1259,6 +1272,9 @@ local START_ACTIONS = {
     ["start-region"] = true,
     ["start-portal"] = true,
     ["start-focused"] = true,
+    -- `toggle` arms a recording while idle, and the control-center tile sends nothing else,
+    -- so it carries the display it was clicked on.
+    ["toggle"] = true,
 }
 
 local function handleAction(action, payload)
@@ -1416,8 +1432,9 @@ noctalia.state.watch("command", function(command)
     elseif type(command) == "string" then
         action = command
     end
-    -- Only a start consumes the sender's display; a stop or a pause must not leave
-    -- a stale monitor behind for the next recording.
+    -- A command's display belongs to that command only: clear it first, so a stop or a
+    -- pause never leaves a stale monitor behind for the next recording.
+    pendingOrigin = nil
     if type(action) == "string" and START_ACTIONS[normalizeEvent(action)]
         and type(command) == "table" and type(command.output) == "string"
         and command.output ~= "" then
