@@ -417,6 +417,31 @@ local function outputByConnector(name)
     return nil
 end
 
+-- The display that covers a point in the compositor's layout. Outputs report the same
+-- logical space that slurp's region geometry uses, so a region can name its own display
+-- without asking where the keyboard focus is.
+local function outputAt(x, y)
+    for _, output in ipairs(noctalia.outputs()) do
+        local left = output.x or 0
+        local top = output.y or 0
+        if x >= left and x < left + (output.width or 0) and y >= top and y < top + (output.height or 0) then
+            return output
+        end
+    end
+    return nil
+end
+
+-- The display a selected region sits on: the one holding its centre, so a region that
+-- spans two displays still lands on exactly one of them. nil when the region does not
+-- parse or no output covers it.
+local function regionOutput(region)
+    local width, height, x, y = region:match("^(%d+)x(%d+)%+(%-?%d+)%+(%-?%d+)$")
+    if width == nil then
+        return nil
+    end
+    return outputAt(tonumber(x) + tonumber(width) / 2, tonumber(y) + tonumber(height) / 2)
+end
+
 local function focusedOutput()
     local name = noctalia.focusedOutputName()
     local byName = if name ~= nil and name ~= "" then outputByConnector(name) else nil
@@ -787,7 +812,7 @@ local function resolveFocusedOutput(id)
     end, 5000)
 end
 
-local function selectRegion(id, cancelKey)
+local function selectRegion(id, cancelKey, origin)
     -- Region geometry is WxH+X+Y, which is slurp's -f format. slurp reads stdin;
     -- point it at /dev/null so it does not block before drawing its overlay.
     noctalia.runAsync("slurp -f '%wx%h+%x+%y' </dev/null", function(result)
@@ -803,7 +828,12 @@ local function selectRegion(id, cancelKey)
             return
         end
         log(`region selected: {region}`)
-        arm("region", region)
+        -- The bar belongs to the display the region was drawn on, not to whichever
+        -- display holds keyboard focus: slurp covers every output, so the two differ
+        -- whenever the user selects on the other monitor. `origin` is the display the
+        -- request came from, and is the fallback when the region names none.
+        local output = regionOutput(region)
+        arm("region", region, if output ~= nil then output.name else origin)
     end, 60000)
 end
 
@@ -888,6 +918,9 @@ local function applyConfirmPlacement()
         target = output.name
     end
     local anchors, margins = edgePlacement(confirmPosition, width)
+    -- The layer is per output, so this line names the display the bar lands on: it is what
+    -- tells a misplaced bar apart from a canvas that was resolved for another display.
+    log(`confirm bar on {target}`)
     noctalia.layer.configure(CONFIRM_LAYER, {
         output = target,
         anchors = anchors,
@@ -969,7 +1002,7 @@ local function reselectRegion()
     if recState ~= "armed" then
         return "not-armed"
     end
-    selectRegion(nextRequest(), "notify.region-cancelled")
+    selectRegion(nextRequest(), "notify.region-cancelled", armed.origin)
     return "selecting"
 end
 
@@ -1049,14 +1082,14 @@ local function begin(modeOverride)
     setState("resolving")
 
     if mode == "region" then
-        selectRegion(id, "notify.region-cancelled")
+        selectRegion(id, "notify.region-cancelled", origin)
         return "selecting"
     end
     if origin ~= nil and (mode == "focused") then
         return arm(origin, "", origin)
     end
     if mode == "portal" then
-        return arm("portal", "")
+        return arm("portal", "", origin)
     end
     if mode == "primary" then
         return arm(firstMonitorConnector(), "")
