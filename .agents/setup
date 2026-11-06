@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# Orb setup for nuarthy/noctalia-dank-recorder.
+#
+# The repository is a Noctalia plugin: Luau entry scripts plus TOML manifests. It has no
+# build step and no dependencies of its own, so the only toolchain a fresh orb lacks is
+# the Luau CLI that compiles and lints those scripts. The Noctalia host, niri and
+# gpu-screen-recorder cannot run inside an orb, which is why this script validates the
+# toolchain instead of the plugin and leaves a note for agents at ~/.config/amp/AGENTS.md.
+set -euo pipefail
+
+# Pinned Luau release from https://github.com/luau-lang/luau/releases. Bump the version,
+# then run this script once in an orb to confirm the release asset still unpacks.
+LUAU_VERSION="0.745"
+# Recorded in the home directory, which is always writable and part of the snapshot, so a
+# restored orb can tell which release its /usr/local/bin binaries came from.
+LUAU_VERSION_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia-dank-recorder/orb-luau.version"
+LUAU_BINARIES=(luau luau-analyze luau-compile)
+
+step() { printf '\n==> %s\n' "$*"; }
+
+# Orbs run setup as the unprivileged user, with passwordless sudo available.
+as_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    else
+        sudo -n "$@"
+    fi
+}
+
+# /usr/local/bin is always on PATH, so prefer it; fall back to the user's own bin directory
+# only when this orb has no root access at all.
+install_luau_binaries() {
+    local source_dir="$1"
+    mkdir -p "$(dirname "$LUAU_VERSION_FILE")"
+    if [ -w /usr/local/bin ]; then
+        install -m 0755 "$source_dir/${LUAU_BINARIES[0]}" "$source_dir/${LUAU_BINARIES[1]}" \
+            "$source_dir/${LUAU_BINARIES[2]}" /usr/local/bin/
+        echo "installed into /usr/local/bin"
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        sudo -n install -m 0755 "$source_dir/${LUAU_BINARIES[0]}" "$source_dir/${LUAU_BINARIES[1]}" \
+            "$source_dir/${LUAU_BINARIES[2]}" /usr/local/bin/
+        echo "installed into /usr/local/bin"
+    else
+        install -d "$HOME/.local/bin"
+        install -m 0755 "$source_dir/${LUAU_BINARIES[0]}" "$source_dir/${LUAU_BINARIES[1]}" \
+            "$source_dir/${LUAU_BINARIES[2]}" "$HOME/.local/bin/"
+        echo "installed into $HOME/.local/bin; keep that directory on PATH"
+    fi
+    printf '%s\n' "$LUAU_VERSION" >"$LUAU_VERSION_FILE"
+}
+
+step "system packages"
+missing_packages=()
+for package in ca-certificates curl unzip jq; do
+    dpkg -s "$package" >/dev/null 2>&1 || missing_packages+=("$package")
+done
+if [ ${#missing_packages[@]} -gt 0 ]; then
+    echo "installing: ${missing_packages[*]}"
+    as_root apt-get update -qq
+    as_root apt-get install -y --no-install-recommends "${missing_packages[@]}"
+else
+    echo "already installed: ca-certificates curl unzip jq"
+fi
+
+step "Luau $LUAU_VERSION"
+toolchain_ready=true
+for binary in "${LUAU_BINARIES[@]}"; do
+    command -v "$binary" >/dev/null 2>&1 || toolchain_ready=false
+done
+if [ "$(cat "$LUAU_VERSION_FILE" 2>/dev/null || true)" = "$LUAU_VERSION" ] && [ "$toolchain_ready" = true ]; then
+    echo "already installed: $(command -v luau)"
+else
+    case "$(uname -m)" in
+        x86_64 | amd64) luau_asset="luau-ubuntu.zip" ;;
+        *)
+            # Leave the orb usable rather than failing setup over an unplanned architecture.
+            echo "no pinned Luau build for $(uname -m); skipping the Luau toolchain" >&2
+            luau_asset=""
+            ;;
+    esac
+    if [ -n "$luau_asset" ]; then
+        download_dir="$(mktemp -d)"
+        trap 'rm -rf "$download_dir"' EXIT
+        curl -fsSL --retry 3 --retry-delay 2 -o "$download_dir/$luau_asset" \
+            "https://github.com/luau-lang/luau/releases/download/$LUAU_VERSION/$luau_asset"
+        unzip -q -o "$download_dir/$luau_asset" -d "$download_dir/bin"
+        install_luau_binaries "$download_dir/bin"
+        rm -rf "$download_dir"
+        trap - EXIT
+    fi
+fi
+
+step "smoke test"
+smoke_dir="$(mktemp -d)"
+trap 'rm -rf "$smoke_dir"' EXIT
+cat >"$smoke_dir/smoke.luau" <<'LUAU'
+local function greet(name: string): string
+    return "hi " .. name
+end
+print(greet("orb"))
+LUAU
+if [ "$(luau "$smoke_dir/smoke.luau")" != "hi orb" ] || ! luau-compile --binary "$smoke_dir/smoke.luau" >/dev/null; then
+    echo "the Luau toolchain does not run in this orb" >&2
+    exit 1
+fi
+echo "luau, luau-analyze and luau-compile run"
+rm -rf "$smoke_dir"
+trap - EXIT
+
+step "agent notes"
+agent_notes="$HOME/.config/amp/AGENTS.md"
+notes_marker="<!-- nuarthy/noctalia-dank-recorder orb notes -->"
+if [ -f "$agent_notes" ] && grep -Fqx "$notes_marker" "$agent_notes"; then
+    echo "already written: $agent_notes"
+else
+    mkdir -p "$(dirname "$agent_notes")"
+    {
+        printf '\n%s\n' "$notes_marker"
+        cat <<'NOTES'
+## nuarthy/noctalia-dank-recorder
+
+- This repository is a Noctalia plugin: Luau entry scripts and TOML manifests, no build step and no dependencies.
+- An orb has no Noctalia host, no niri, no gpu-screen-recorder and no Wayland session, so the plugin cannot be run, screenshotted or linted with `noctalia plugins lint` here. Verification is static.
+- `.agents/setup` installs the Luau CLI. Compile a changed file with `luau-compile --binary dank-recorder/<file>.luau > /dev/null` and lint it with `luau-analyze dank-recorder/<file>.luau`. `Unknown global 'noctalia'`, `'ui'`, `'layer'` and `FunctionUnused` diagnostics are expected: the globals come from the host, which calls the entry points.
+- Verify service behaviour by running `dank-recorder/service.luau` under `luau` with a stub `noctalia` table in a scratch file under /tmp, then delete the scratch file.
+- The plugin API reference is https://docs.noctalia.dev/noctalia/plugins/development/ and https://github.com/noctalia-dev/official-plugins/blob/main/noctalia.d.luau.
+NOTES
+    } >>"$agent_notes"
+    echo "wrote: $agent_notes"
+fi
+
+printf '\nsetup complete\n'

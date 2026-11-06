@@ -5,3 +5,8 @@
 
 # Per-user plugin state
 settings.json
+
+# Orb runtime state: portal registrations, service metadata and scratch files
+.amp/portals/
+.amp/services/
+.amp/in/

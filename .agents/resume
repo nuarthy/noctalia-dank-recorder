@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Orb resume for nuarthy/noctalia-dank-recorder.
+#
+# There is nothing to authenticate, reconnect or seed here: the plugin's dependencies live
+# in the repository, and the Luau toolchain is baked into the orb snapshot by setup. This
+# only reports a toolchain that a restored or cleaned-up orb no longer has, so the next
+# agent reruns setup instead of debugging a missing binary. Never installs anything.
+set -euo pipefail
+
+missing=()
+for binary in luau luau-analyze luau-compile; do
+    command -v "$binary" >/dev/null 2>&1 || missing+=("$binary")
+done
+
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "orb-resume: missing ${missing[*]}; run 'bash .agents/setup' in the repository root" >&2
+fi
