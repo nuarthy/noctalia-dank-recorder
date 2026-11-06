@@ -442,6 +442,17 @@ local function regionOutput(region)
     return outputAt(tonumber(x) + tonumber(width) / 2, tonumber(y) + tonumber(height) / 2)
 end
 
+-- The connected outputs as "name x,y WxH", for the one log line that explains a placement
+-- when a bar lands on a display the user did not expect.
+local function describeOutputs()
+    local parts = {}
+    for _, output in ipairs(noctalia.outputs()) do
+        parts[#parts + 1] =
+            `{output.name} {tostring(output.x)},{tostring(output.y)} {tostring(output.width)}x{tostring(output.height)}`
+    end
+    return if #parts > 0 then table.concat(parts, " | ") else "none"
+end
+
 local function focusedOutput()
     local name = noctalia.focusedOutputName()
     local byName = if name ~= nil and name ~= "" then outputByConnector(name) else nil
@@ -813,13 +824,23 @@ local function resolveFocusedOutput(id)
 end
 
 local function selectRegion(id, cancelKey, origin)
-    -- Region geometry is WxH+X+Y, which is slurp's -f format. slurp reads stdin;
-    -- point it at /dev/null so it does not block before drawing its overlay.
-    noctalia.runAsync("slurp -f '%wx%h+%x+%y' </dev/null", function(result)
+    -- Region geometry is WxH+X+Y, which is slurp's -f format, and %o appends the connector
+    -- of the output the selection starts on. slurp resolves that from the compositor's own
+    -- output layout, so the display no longer has to be derived from output coordinates
+    -- that a shell may report differently. slurp reads stdin; point it at /dev/null so it
+    -- does not block before drawing its overlay.
+    noctalia.runAsync("slurp -f '%wx%h+%x+%y;%o' </dev/null", function(result)
         if id ~= requestId then
             return
         end
-        local region = noctalia.string.trim(result.stdout or "")
+        local answer = noctalia.string.trim(result.stdout or "")
+        -- Older slurp builds print the unknown specifier literally, so everything after the
+        -- separator is checked against the connected outputs before it is trusted.
+        local region, named = answer:match("^([^;]+);(.+)$")
+        if region == nil then
+            region = answer
+            named = nil
+        end
         if result.exitCode ~= 0 or not region:match("^%d+x%d+%+%-?%d+%+%-?%d+$") then
             if recState == "resolving" then
                 setState("idle")
@@ -827,12 +848,15 @@ local function selectRegion(id, cancelKey, origin)
             notifyInfo(cancelKey)
             return
         end
-        log(`region selected: {region}`)
+        log(`region selected: {region} ({tostring(named)})`)
         -- The bar belongs to the display the region was drawn on, not to whichever
         -- display holds keyboard focus: slurp covers every output, so the two differ
         -- whenever the user selects on the other monitor. `origin` is the display the
         -- request came from, and is the fallback when the region names none.
-        local output = regionOutput(region)
+        local output = if named ~= nil then outputByConnector(named) else nil
+        if output == nil then
+            output = regionOutput(region)
+        end
         arm("region", region, if output ~= nil then output.name else origin)
     end, 60000)
 end
@@ -960,6 +984,12 @@ end
 
 -- Arm the recorder and show the confirmation bar. With confirmation off, start now.
 function arm(source, region, origin)
+    -- One line per start, so a bar on an unexpected display can be traced from the log:
+    -- the source that was captured, the display the request named, and what the shell
+    -- reports for focus and for the outputs themselves.
+    log(
+        `arm source={source} origin={tostring(origin)} focus={tostring(noctalia.focusedOutputName())} outputs={describeOutputs()}`
+    )
     if not confBool("confirm_before_recording", true) then
         return if launch(source, region) then "started" else "failed"
     end
