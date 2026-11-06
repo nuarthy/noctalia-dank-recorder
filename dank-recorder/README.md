@@ -127,7 +127,7 @@ Recorder**; changing it there takes precedence over the last **Move**.
 | Button | Result |
 | --- | --- |
 | Move (arrows) | Swap the bar between the bottom and top edges. The choice is remembered. |
-| Display (monitor icon) | Step the target to the next connected display; the canvas label follows. Enabled when more than one display is connected. |
+| Display (monitor icon) | Step the target to the next connected display. The bar moves to that display and the canvas label follows. Enabled when more than one display is connected. |
 | Full screen | Capture the whole focused display. Enabled while a region is selected. |
 | Region | Select the canvas again with `slurp`. |
 | Sound / Muted | Include desktop audio, or mute. The source comes from the Audio setting. |

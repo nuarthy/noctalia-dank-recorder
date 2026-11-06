@@ -1053,9 +1053,9 @@ local function reselectRegion()
     return "selecting"
 end
 
--- Step the armed target to the next connected display. The canvas bar exposes this
--- because the focused output is not always the display the user is working on, and
--- gsr's own keywords cannot express "the other monitor".
+-- Step the armed target, and the bar with it, to the next connected display. The canvas bar
+-- exposes this because the focused output is not always the display the user is working on,
+-- and gsr's own keywords cannot express "the other monitor".
 local function cycleOutput()
     if recState ~= "armed" then
         return "not-armed"
@@ -1067,15 +1067,21 @@ local function cycleOutput()
     if #names == 0 then
         return "no-outputs"
     end
+    -- Step from the display the bar is on rather than from the capture source: with a region
+    -- or the portal the source names no display, and stepping from it always landed back on
+    -- the first one. The bar follows the new display, so the canvas and the bar never
+    -- describe two different monitors.
+    local current = confirmOutput()
+    local currentName = if current ~= nil then current.name else ""
     local nextName = names[1]
     for index, name in ipairs(names) do
-        if name == armed.source then
+        if name == currentName then
             nextName = names[(index % #names) + 1]
             break
         end
     end
     nextRequest()
-    return arm(nextName, "", armed.origin)
+    return arm(nextName, "", nextName)
 end
 
 local function useFullScreen()
