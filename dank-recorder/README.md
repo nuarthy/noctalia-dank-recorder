@@ -113,11 +113,12 @@ Before a recording starts, a bar appears over the screen that will be captured. 
 the canvas and offers six actions:
 
 The bar is a `[[layer]]`, so the plugin owns its geometry: the surface is exactly the card,
-it appears on the display that will be recorded, and it reserves no screen space. It is
-centred horizontally and sits along one edge - the bottom, or the top. **Move** swaps the
-two edges, and the service remembers the choice, so the next recording starts in the same
-place. The bottom position anchors to the bottom edge, which keeps the bar above the
-shell's own bar instead of over it.
+it appears on the display that will be recorded, and it reserves no screen space. The
+surface is sized to its content and anchored to a single edge, which centres it horizontally
+and keeps the card's own padding however many controls it holds; it sits along the bottom or
+the top. **Move** swaps the two edges, and the service remembers the choice, so the next
+recording starts in the same place. The bottom position anchors to the bottom edge, which
+keeps the bar above the shell's own bar instead of over it.
 
 Noctalia gives a layer's script no pointer events except the ones its own controls consume,
 so the bar cannot be dragged by its background: **Move** is the equivalent control. The
@@ -129,7 +130,7 @@ Recorder**; changing it there takes precedence over the last **Move**.
 | Move (arrows) | Swap the bar between the bottom and top edges. The choice is remembered. |
 | Display (monitor icon) | Step the target to the next connected display. The bar moves to that display and the canvas label follows. Enabled when more than one display is connected. |
 | Full screen | Capture the whole focused display. Enabled while a region is selected. |
-| Region | Select the canvas again with `slurp`. |
+| Region | Select the canvas again with `slurp`. The bar fades to 25 % while the selection is open. |
 | Sound / Muted | Include desktop audio, or mute. The source comes from the Audio setting. |
 | Cancel | Discard the pending recording. |
 | Start recording | Begin the recording. |

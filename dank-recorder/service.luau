@@ -24,9 +24,6 @@ local LOG_TAIL_BYTES = 1500
 
 -- The confirmation bar's [[layer]] entry. Layers are addressed by their local id.
 local CONFIRM_LAYER = "confirm"
--- Surface width in logical px, matching the [[layer]] entry in plugin.toml. The bar is
--- centred with it, so the placement needs no height.
-local CONFIRM_WIDTH = 960
 -- Gap between the bar and the output edge it sits on.
 local CONFIRM_INSET = 24
 
@@ -222,6 +219,9 @@ local confirmSetting = "bottom"
 -- screen only while armed, so this is what tells a bar on the wrong display apart from a
 -- canvas that was resolved for another one.
 local confirmDisplay = ""
+-- True while slurp is open for the Region control, so the bar can fade out of the way of the
+-- selection. Cleared when the selection returns, is cancelled, or the bar is dismissed.
+local regionSelecting = false
 
 local gpus = {}
 local gpuSummary = ""
@@ -254,6 +254,7 @@ local function publish()
         outputDir = outputDirectory(),
         position = confirmPosition,
         display = confirmDisplay,
+        selecting = regionSelecting,
     })
 end
 
@@ -851,6 +852,9 @@ local function selectRegion(id, cancelKey, origin)
         if id ~= requestId then
             return
         end
+        -- slurp has closed: the bar comes back to full opacity before anything else happens.
+        regionSelecting = false
+        publish()
         local answer = noctalia.string.trim(result.stdout or "")
         -- Older slurp builds print the unknown specifier literally, so everything after the
         -- separator is checked against the connected outputs before it is trusted.
@@ -939,33 +943,33 @@ local function confirmOutput()
     return focusedOutput()
 end
 
--- Anchors and margins for one edge. A bottom position anchors to the bottom edge, so the
--- compositor places the bar above the shell's own bar and dock instead of over them. The
--- bar is centred on the output either way.
-local function edgePlacement(position, width)
-    local left = math.max(0, math.floor((width - CONFIRM_WIDTH) / 2))
+-- Anchors and margins for one edge. Only that edge is anchored: a layer with no width and
+-- no anchor along the other axis is sized to its content and centred there by the
+-- compositor, so the card keeps its own padding whatever it holds and on any display. The
+-- bottom position anchors to the bottom edge, which places the bar above the shell's own
+-- bar and dock instead of over them.
+local function edgePlacement(position)
     if position == "top" then
-        return { "top", "left" }, { top = CONFIRM_INSET, left = left }
+        return { "top" }, { top = CONFIRM_INSET }
     end
-    return { "bottom", "left" }, { bottom = CONFIRM_INSET, left = left }
+    return { "bottom" }, { bottom = CONFIRM_INSET }
 end
 
 local function applyConfirmPlacement()
     local output = confirmOutput()
-    local width = CONFIRM_WIDTH
     local target = "focused"
     if output ~= nil then
-        local scale = if type(output.scale) == "number" and output.scale > 0 then output.scale else 1
-        width = math.floor((output.width or 0) / scale)
         target = output.name
     end
-    local anchors, margins = edgePlacement(confirmPosition, width)
+    local anchors, margins = edgePlacement(confirmPosition)
     confirmDisplay = target
     -- The layer is per output, so this line names the display the bar lands on: it is what
     -- tells a misplaced bar apart from a canvas that was resolved for another display.
     log(`confirm bar on {target}`)
     noctalia.layer.configure(CONFIRM_LAYER, {
         output = target,
+        -- Content width: a fixed width is what squeezed the controls against the card edge.
+        width = 0,
         anchors = anchors,
         margins = margins,
     })
@@ -994,6 +998,8 @@ local function clearArmed()
     armed.region = ""
     armed.isRegion = false
     canvasLabel = ""
+    -- A cancelled or started bar must not leave the fade behind for the next one.
+    regionSelecting = false
 end
 
 -- Arm the recorder and show the confirmation bar. With confirmation off, start now.
@@ -1049,6 +1055,10 @@ local function reselectRegion()
     if recState ~= "armed" then
         return "not-armed"
     end
+    -- The bar fades while slurp is open, so the selection is drawn against the screen and not
+    -- against the bar it is about to replace.
+    regionSelecting = true
+    publish()
     selectRegion(nextRequest(), "notify.region-cancelled", armed.origin)
     return "selecting"
 end

@@ -17,7 +17,7 @@
 
 id = "nuarthy/dank-recorder"
 name = "Dank Recorder"
-version = "1.1.3"
+version = "1.1.4"
 plugin_api = 36
 author = "nuarthy"
 license = "MIT"
@@ -221,20 +221,22 @@ position = "auto"
 open_near_click = true
 
 # The canvas confirmation bar. It is a [[layer]] (plugin API 36) so the plugin owns its
-# geometry: the service centres it on an edge with noctalia.layer.configure() before it
+# geometry: the service anchors it to one edge with noctalia.layer.configure() before it
 # shows the bar, and its Move control swaps the bottom and top edges. That is what makes
 # the bar movable - a [[panel]] is host-placed and cannot be moved at all.
 #
-# The layer is on screen only while a recording is armed, never takes keyboard focus,
-# and reserves no screen space (exclusive_zone = 0).
+# width = 0 sizes the surface to its content, and anchoring only one edge centres it along
+# the other axis, so the card keeps its own padding whatever the controls add up to and on
+# any display. The layer is on screen only while a recording is armed, never takes keyboard
+# focus, and reserves no screen space (exclusive_zone = 0).
 [[layer]]
 id = "confirm"
 entry = "confirm.luau"
 layer = "overlay"
-anchors = ["top", "left"]
-width = 960
+anchors = ["bottom"]
+width = 0
 height = 56
-margins = { top = 0, left = 0 }
+margins = { bottom = 24 }
 exclusive_zone = 0
 keyboard = "none"
 output = "focused"
