@@ -1,7 +1,7 @@
 [[plugin]]
 id           = "nuarthy/dank-recorder"
 name         = "Dank Recorder"
-version      = "1.1.4"
+version      = "1.1.5"
 author       = "nuarthy"
 license      = "MIT"
 icon         = "video"

@@ -75,7 +75,8 @@ local function render()
     local display = status.display or ""
     -- While slurp is open for the Region control the service fades the bar, so the selection is
     -- drawn on a clear screen. The fade is a group opacity, so the card and its controls dim
-    -- together; it comes back when the selection lands or is cancelled.
+    -- together. The full value is sent rather than omitted: the host keeps a prop that
+    -- disappears from the tree, and an omitted opacity would leave the bar faded for good.
     local selecting = status.selecting == true
     -- Move swaps the bar between the two edges, so the tooltip names where it goes.
     local moveTooltip = if (status.position or "bottom") == "top" then tr("confirm.move-down-tooltip") else tr("confirm.move-up-tooltip")
@@ -95,7 +96,7 @@ local function render()
         paddingH = 14,
         paddingV = 7,
         justify = "center",
-        opacity = if selecting then 0.25 else nil,
+        opacity = if selecting then 0.25 else 1,
     }, {
         ui.row({ height = 42, gap = 8, align = "center" }, {
             ui.column({
@@ -126,9 +127,11 @@ local function render()
                 paddingH = if display ~= "" then 9 else 0,
                 paddingV = if display ~= "" then 4 else 0,
                 radius = 8,
-                fill = if display ~= "" then "primary/0.14" else nil,
+                fill = "primary/0.14",
                 align = "center",
                 justify = "center",
+                -- Every prop is sent on every render: an omitted one is retained by the host.
+                opacity = if display ~= "" then 1 else 0,
             }, {
                 ui.label({
                     text = display,
