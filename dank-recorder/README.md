@@ -130,7 +130,7 @@ Recorder**; changing it there takes precedence over the last **Move**.
 | Move (arrows) | Swap the bar between the bottom and top edges. The choice is remembered. |
 | Display (monitor icon) | Step the target to the next connected display. The bar moves to that display and the canvas label follows. Enabled when more than one display is connected. |
 | Full screen | Capture the whole focused display. Enabled while a region is selected. |
-| Region | Select the canvas again with `slurp`. The bar fades to 25 % while the selection is open. |
+| Region | Select the canvas again with `slurp`. The bar hides while the selection is open. |
 | Sound / Muted | Include desktop audio, or mute. The source comes from the Audio setting. |
 | Cancel | Discard the pending recording. |
 | Start recording | Begin the recording. |

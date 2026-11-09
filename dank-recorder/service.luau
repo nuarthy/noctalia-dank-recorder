@@ -219,8 +219,8 @@ local confirmSetting = "bottom"
 -- screen only while armed, so this is what tells a bar on the wrong display apart from a
 -- canvas that was resolved for another one.
 local confirmDisplay = ""
--- True while slurp is open for the Region control, so the bar can fade out of the way of the
--- selection. Cleared when the selection returns, is cancelled, or the bar is dismissed.
+-- True while slurp is open for the Region control, so the bar can hide out of the way of
+-- the selection. Cleared when the selection returns, is cancelled, or the bar is dismissed.
 local regionSelecting = false
 
 local gpus = {}
@@ -998,7 +998,7 @@ local function clearArmed()
     armed.region = ""
     armed.isRegion = false
     canvasLabel = ""
-    -- A cancelled or started bar must not leave the fade behind for the next one.
+    -- A cancelled or started bar must not leave the bar hidden for the next one.
     regionSelecting = false
 end
 
@@ -1055,8 +1055,8 @@ local function reselectRegion()
     if recState ~= "armed" then
         return "not-armed"
     end
-    -- The bar fades while slurp is open, so the selection is drawn against the screen and not
-    -- against the bar it is about to replace.
+    -- The bar hides while slurp is open, so the selection is drawn against the screen and
+    -- not against the bar it is about to replace.
     regionSelecting = true
     publish()
     selectRegion(nextRequest(), "notify.region-cancelled", armed.origin)
